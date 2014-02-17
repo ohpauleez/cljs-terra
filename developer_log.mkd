@@ -1,0 +1,479 @@
+Cyclone/Clojure Inspired C - CLIC  (or CYCLIC)
+==============================================
+
+## Rationale
+
+Clojure's opinions make for an attractive, well-balanced, powerful, and simple
+language, but there are no comparable options for highly-constrained
+applications:
+
+ * Operating systems and kernels
+ * Real-time computation
+ * resource-sensitive and resource-constrained systems
+
+While Clojure and the JVM (and to some degree  CLJS and V8) are advantageous in larger
+systems-of-systems engineering, they are not ideal or even acceptable for the
+fields listed above.  Typically, such domains require or strive for:
+
+ * Binary compatiblity with C (for library and ABI support)
+ * LLVM compilation targets
+ * Runtimes smaller than 500K
+ * Deterministic runtime characteristics
+
+In some cases, Clojure (and the JVM) could be adapted to achieve some of the desired
+goals.  Interfacing and adapting the use of something like [Javolution](javolution.org)
+would allow Clojure to be more deterministic and fulfill real-time requirements.
+
+Ideally, producing LLVM intermediate code would allow for a compilation chain
+to take advantage of [HSA tooling](http://hsafoundation.com/hsa-developer-tools/)
+and other advancements from LLVM targets.  This is ideal for High-Performance
+computing as well as embedded (but highly specialized) Systems-on-a-Chip (SoC).
+
+The main design question is:
+
+     What would C look like if it were designed today?
+
+C inspired by:
+
+ * [Clojure](http://clojure.org/)
+ * [Cyclone](http://cyclone.thelanguage.org/)
+
+To a lesser degree
+
+ * [Rust](http://www.rust-lang.org/)
+ * [SAClib](https://github.com/ohpauleez/saclib)
+ * [BitC](http://www.bitc-lang.org/)
+ * [Deca](https://code.google.com/p/decac/)
+ * [Io](http://iolanguage.org/) - homoiconic
+ * [Julia](http://julialang.org/) - homoiconic (like R)
+ * [Terra](http://terralang.org)
+   * [HackerNews Conversation](https://news.ycombinator.com/item?id=5702793) expands on the sweet-spot for Terra
+   * [Original paper](http://terralang.org/pldi071-devito.pdf)
+ * [Mjolnir](https://github.com/halgari/mjolnir)
+
+I would like something C-like/native that supports:
+
+ * Namespaces
+ * Protocols & ideally predicate dispatch
+ * Persistent data structures with transients (or pods) and metadata
+ * Region-based memory management with region inference
+ * First class functions and proper closures
+ * Destructuring/binding via data structures or pattern matching
+ * The Sequence abstraction
+ * Lazy and eager evaluation - lazy by default with functions for eagerness
+ * Improved pointer safety and region checking
+ * Immutability as default, while maintaining convenient array manipulation
+ * Structs as Records with property access
+ * Proper promises
+ * Common FP functions/operations provided (all sequence oriented functions)
+ * Some notion of memory safety
+ * No requirement of an external runtime/virtual or operating system
+   * Although using one should always remain an option
+
+The language should explore:
+
+ * Separating the syntax from the language
+ * Pluggable, Optional type systems, with a separate hook/phase in compilation
+   * This includes the type system, checker (if any), and inference
+   * The only requirement is that all type systems need to resolve to
+     C types/OS memory
+ * Pluggable, Optional exception handling (exception handling as a library)
+ * Multi-stage programming
+ * Can this all be implemented cleanly on top of C (ala SAClib)?
+ * Optional GC - either in place of the region system, or on top of the region system
+   * Maybe this implies regions are opt-in?
+
+Additional (but orthogonal) explorations include:
+
+ * Multiple Language feature expressions with LLVM cross-compilation and linking
+   * This could be built on something like Julia's `llvmcall`
+ * Concurrency that supports Futures and CSP (state machines in parallel) at a minimum
+
+The language is never concerned with:
+
+ * Binary compatibility with C++
+ * Image-based runtimes (ala Smalltalk)
+
+
+- - - -
+What follows is a developer journal as the ideas are explored one-by-one.
+
+The current approach is:
+
+Write a ClojureScript compiler on top of Terra (which in turn uses LuaJit).
+This allows a developer to choose from a language spectrum that covers:
+C -> Terra -> Lua(JIT) -> ClojureScript.  In this spectrum C exists only for
+legacy reasons - where you'd want to embed Terra into an existing system, or
+where you'd want Terra's FFI to use a legacy library.  Terra's LLVM backing
+allows open, extensible, low-level compilation to LLVM Target, while
+providing the tooling for such low-level code to be generated from higher level
+languages (Lua and ClojureScript).  The generated/compiled code requires no
+runtime whatsoever.  LuaJIT's resident memory space is about 300K, but executes
+code considerably faster than Python, PyPy, Julia, and V8.  Terra statically
+links the LLVM libs, requiring no third-party dependencies for running the packaged
+runtime.
+
+In summary:
+
+ * Binary compatibility with C (Fastest FFI of all languages)
+ * Embed in C applications
+ * Small footprint
+ * Compilation with no runtime dependency
+ * Optional Runtime for dynamic scripting (or live code generation/optimization),
+   with better performance charateristic than alternative scripting languages
+ * ClojureScript for the highest-level of abstraction; AOT compilation (for the time being)
+   * CLJS can be used purely for Lua (scripting on LuaJIT), Terra (low-level code), or both
+
+This approach allows for:
+
+ * Talking directly to hardware if needed ala C libs or something like [Snabb Switch](https://github.com/SnabbCo/snabbswitch/wiki)
+   * See testimony [here](https://news.ycombinator.com/item?id=7250505) and follow links as needed.
+ * Embedding into kernels, even real-time ones like [L4](https://os.inf.tu-dresden.de/L4Re/doc/l4re_servers_ned.html)
+ * Building applications, scripts, runtime libraries, or AOT-compiled shared-libs
+ * Building hard real-time applications on top of stock Linux [with some modifications](http://www.orocos.org/wiki/orocos/toolchain/luacookbook)
+
+The current TODO is (See Jan 31,2014 and after):
+
+ * Build a better `stdlib` with LPeg included (and wrapped as an Object)
+ * Integrate and refactor Terra with the new stdlib (details below)
+ * Add the Interface (Protocol) piece into Terra with reflection added
+ * Write CLJS-Lua upon the new stdlib (supporting LuaJIT FFI and FFI calls) and LDoc
+ * Make CLJS array operations protocol-based, add a `cljs.terra` namespace
+   for the Terra specific features
+ * Replace `std.functional` with a `Mori`-like precompiled CLJS core
+   * Data structures are first class in std (not in `functional`)
+ * Rope in pieces from [Terra Utils](https://github.com/dritchie/terra-utils)
+ * Add `llvm_call` to Terra and expose in `cljs.terra`
+ * Package up the MPS memory pool for Terra and expose in `cljs.terra.mempool`
+
+For details of these items (and their rationale), please read below.
+- - -
+
+Note: I've been looking for a new language replacement in a niche I work in.
+I was finally pushed over the edge when I saw the quest to [replace Python](http://roscidus.com/blog/blog/2013/06/09/choosing-a-python-replacement-for-0install/)
+
+
+Originally, it seemed like the most attractive path forward was:
+
+ * A C library with Terra support, for the base feature set
+ * Additional libs in the same fashion, for auxiliary goals
+ * Maybe ClojureScript-Terra - which could second as a CLJS-Lua.
+
+The C library could technically be written in Mjolnir or Terra.
+Technically, the two should be able to interop (they share a lot of similarities).
+
+In fact, Mjolnir (or something very close to it) could easily be ported to
+ClojureScript-Terra.
+Some of Mjolnir becomes redundant in the CLJS-Terra world, while other
+necessary pieces are missing (Datomic).  The Datomic piece can be back filled
+on the back of the REST API, since EDN will still be first-class in CLJS-Terra
+
+Rough notes:
+ * Mjolnir needs FFI (jna is sort of this)  and something analogous to Terra's "escape" (which could be a pretty easy macro)
+   * This is geting pretty close to [clojure-metal](https://github.com/halgari/clojure-metal)
+ * Terra would need all the ClojureScript implementation
+ * Both need regions introduced,  Regions could look like hash maps
+ * Both need low-level immutable data structures and ideally convenient syntax
+   * cljs-terra can take the `mori` approach
+
+There are a lot of overlapping goals for clojure-metal as there are here.
+I disagree that we need to start from the VM level - Lua is a prime target.
+The promise of a completely thread-safe scripting language is nice though.
+Lua obviously achieves this by being single-threaded, but I plan on
+introducing a library of executors on POSIX threads, from the bottom up
+(from a native or C context).  The same approach will be done for Regions.
+
+Terra's compilation (and some language features) are very similar to the work
+in Mjolnir.  Both are viable paths forward (clojure-metal and clojurescript-lua
+are proof of this), but CLJS-Terra solves two major problems: the library
+phenomena, and an existing platform for embedding (Lua/Terra State).
+
+There is considerable work needed to refactor Terra's compiler-strategy into
+chunks that compose - something more akin to Mjolnir's strategy.
+From there, this individual pieces should be exposed to Terra directly.
+The real goal here is to have full control over the LLVM IR generation, Module
+creation, and ultimately, the final TargetMachine compilation.
+
+Once that is done, we can write a ClojureScript backend for Terra, using the
+CLJS-Lua code as a guide.  We can modify Terra directly to include the necessary
+Lua libraries (json).  We can also extend the language to include `defnf` -
+which will just be a terra function, where defn will be a normal lua function.
+
+The one concern is that Lua's GC may be sensitive to empheral garbage (high allocs,
+high trash), which will get hit when using immutable data structures.
+Terra is manually managed.  The Safe programming language from UCM provides
+some light about region inference and compilation in functional programming
+languages.
+
+It would be a far-goal to use the Clojure-in-Clojure tool chain to compile the
+compiler into terra, or write the write the final compiler in terra itself and
+use the CLJS-written analyzer.
+
+
+Other links to be aware of:
+
+ * [Public Domain C Lib](http://pdclib.e43.eu/)
+ * [Glib](https://developer.gnome.org/glib/) could provide some base functionality I could build off of.
+ * [A Port of Underscore called Moses](https://github.com/Yonaba/Moses) for Lua
+   * Also, another [direct port](https://github.com/mirven/underscore.lua)
+ * Numeric Computing for LuaJIT 2 - [lna](http://oproj.tuxfamily.org/release/2013/09/10/lna-release.html)
+   * [LuaJIT numeric performance guide](http://wiki.luajit.org/Numerical-Computing-Performance-Guide)
+
+
+### Looking into Terra's compilation
+
+While parts of the pipeline are very OO, most of it C-style imperative.
+The functions are all static calls, and the state of type-checking/compilation
+is attached to each Terra function like metadata.  Sadly, that metadata is
+updated in place (compilation doesn't generate new functions)
+
+In order for that to work (currently), the compiler needs to be initialized
+ahead of time when Terra itself initializes.  This is ok because compilation
+and optimization only go as far as LLVM IR.
+The trade-off is clear - you get one-time, upfront intialization and simplied
+tooling at the cost of little flexibility and no extension in the compiler itself.
+It definitely doesn't follow an open-closed principle.  There is even an example of the real
+pain this causes - CUDA compilation requires an entirely different compiler
+path and takes up an additional environment var.  The compiler is mostly used
+to write the final LLVM Module to PTX, `moduleToPTX`.
+
+Terra uses the older LLVM JIT instead of the newer MCJIT.
+This is because of the compilation strategy (and the desire to lazily compile
+functions as they're used).  The newer MCJIT needs to compile complete modules
+at a time and you can't add functions to modules after the fact.
+We might come back and clean it up based on the [LLVM Blog Post](http://blog.llvm.org/2013/07/using-mcjit-with-kaleidoscope-tutorial.html)
+
+Here's the standard compilation lifecycle:
+ 1. `tcompiler.cpp:terra_compilerinit` takes the `terra_State`, _T_, builds a new
+    `compiler_State`, initializes the JIT memory setup, sets LLVM's Code gen
+    optimization to aggressive, grabs the default Triple from LLVM, looks up
+    the LLVM Machine that matches, and generates a new LLVM TargetMachine from
+    that information.
+    The important data is:
+    * `T->C = new terra_CompilerState();`
+    * `T->C->tm = TM;` The TargetMachine
+      `TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);`
+    * `T->C->m = new Module("terra",*T->C->ctx);`
+    * The ExecutionEngine is `T->C->ee`
+    * `ee` does not reference tm
+    * `tm` is only used in `T->C->mi = createManualFunctionInliningPass(T->C->tm);`
+    * `mi` is only used in the optimization phase `terra_optimize`, which is later called in terra.optimize/context.finalize
+ 1. `compilerinit` is called in `terra.cpp:terra_initwithoptions`, where the
+    Terra State is established and Terra is fully initialized.  This is also where
+    Terra injects things into the Lua State (like top-level terra things) and
+    does some init'd of luaJIT
+ 1. `initwithoptions` is called from the top-level `terra.cpp:terra_init`
+ 1. `terra_init` is called when embedding or in Terra's `main.cpp`
+ 1. Actual compilation is triggered by `terralib.lua:saveobj` which calls the
+    `emitllvm` function attached to the Terra functions
+ 1. `emitllvm` is actually: `function terra.funcdefinition:emitllvm(cont)`
+    which tracks the functions own compilation with state stored on `self` vars.
+    The compiler context used, which is terra lib-global at: `local ctx = terra.getcompilecontext()`
+ 1. `getcompilecontext` sets the global context Singleton:
+    `terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)`
+ 1. The context is twiddled through `terra.context.*` functions, which in `terra.context.finalize` calls `terra.codegen`
+ 1. Actual compilation happens with a call to `codegen` which is back in tcompiler.cpp
+ 1. The heart of compilation is the `tcompiler.cpp:TerraCompiler`; the entrypoint in the compiler is `void run(terra_State * _T, int ref_table)`
+   * `ee` and `m` are only used in `Value * emitExpRaw(Obj * exp)`
+ 1. `Saveobj` writes the LLVM Module (of the Terra functions) to a machine
+    specific object file or executable.
+   * `tm` is used in `static int terra_saveobjimpl` and
+     `static int terra_linklibraryimpl(lua_State * L)`
+     - this could be passed in to override
+ 1. A call to `terra.jit` would produce a jit compilation of the LLVM code for
+    a given function.
+
+There are in tcompiler.cpp:
+
+```
+_(codegen,1) /*entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist*/\
+_(optimize,1) /*entry point from lua into compiler to perform optimizations at the function level, passed an entire strongly connected component of functions\
+                all callee's of these functions that are not in this scc have already been optimized*/\
+_(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
+```
+
+TODO:
+  * saveobj should allow for the final obj file to be written with a new triple (constructing a new TargetMachine), for line 2523
+  * Port Julia's [llvmcall](https://github.com/JuliaLang/julia/pull/5046) function.
+  * Code should be updated to [use MCJIT](https://github.com/zdevito/terra/issues/58)
+  * Port lua-cjson to pure terra
+  * Add [multi dispatch](https://gist.github.com/SegFaultAX/3364849) and [dir]()
+  * Add something like [mori](https://github.com/swannodette/mori) and [ki](https://github.com/lantiga/ki), once the CLJS port is done
+  * Wrap up [MPS Memory Pool](http://www.ravenbrook.com/project/mps/)
+  * Write Terra versions of the data structures on top of MPS
+
+As I write cljs-terra, here are a list of things I need to go back and do:
+
+  * Terra Arrays should be their own type (via deftype)
+  * Terra Vectors should be their own type (via deftype)
+  * Array functions should be a protocol, supporting Lua Tables, Terra Arrays, and Terra Vectors
+
+
+The current approach in CLJS-Lua for handling protocols (and other operations attached to built-in types) is to attach
+it to primitive metatables via `debug.setmetatable`.  This is faster than having a global table and using a dispatch
+map, and is roughly the same as using proxies (via `newproxy`).  It is still slower than a direct function call.
+
+To highly optimize the implementation, we could create a name munge process - something like `TYPE__PROTOCOL__FUNC__ARITY = function (...)`
+This seems messy and unwarranted - 10m function calls take 2 seconds on standard Lua; 10m metatable calls take 3 seconds
+
+
+(Jan 19, 2014)
+I've done most of the work to make the analyzer host-neutral.  It still assumes there's some form of base "object"
+I'm mostly finished with the compiler and the core (core.clj).  I've removed some js-specific pieces from core.clj,
+and replaced them with new keywords and macros/functions (that other backends can specify) that generate host/platform
+specific code.  I benched various ways to implement multimethods and protocols in lua - the direction CLJS-Lua took
+(whether intentional or not) was the best balance between semantics, convenience, and speed.
+CLJS-Lua needed to supply a base `builtins` to smooth the interop between ClojureScripts semantics and the core language.
+It's still missing fundamental pieces, like RegExs, and provides wrappers which might not be necessary (for example,
+you don't really need to wrap Arrays just to comply with function calls in Lua, you could just use Tables and adjust
+the compiler and core.
+
+In the meantime - I've added `dir`, `range`, and a very limited (lua-only) `multimethod` to Terralib.  I may remove the multimethod
+once the CLJS-Terra is in place (and generates decent Lua and/or Terra code), and just link it in ala `mori`.  I'd also
+like to add in protocols at the Lua level - I may take the `mori` approach here as well.  Otherwise, I can pull
+inspiration from [a JS attempt](https://github.com/Gozala/protocol) and the approach used in [Elixir](http://elixir-lang.org/getting_started/4.html)
+
+UPDATE:
+Terra already has protocols in the form of go-like object/interface systems, using structs.
+The working on the functions from "Interface" to "protocol" seems appropriate.
+
+
+(Jan 25, 2014)
+I'm unsure the best strategy for rolling the terra stuff in.  I could just produce a `terra` call, like the anonymous function call,
+or a full `terra` function like a `defnf` form.  The tricky part is that `let` bindings inside the function needed to be
+treated differently.  I may just fall back to the same approach used in Mjolnir.
+Doing so would mean that CLJS-Terra is CLJS-Lua + a Terra specific library.  The major tradeoff is going out of your way to
+write performance critical code, rather than having the CLJS compiler do the heavy lifting for you.
+I could also do the inverse - all functions/lets/etc are Terra specific, and offer Lua-variants as a library.  This means
+the compiler (CLJS and Terra) do the heavy lifting for you, but you have to go out of your way to target pure Lua.
+
+Perhaps we can do the former, and use macro-magic + analyzer tweaks to make it feel as natural/effortless/direct as
+possible.
+
+
+(Jan 29, 2014)
+It's becoming very difficult to draw the line between letting CLJS generate Lua and generating Terra.
+A recent example - it'd be PERFECT to back Protocols on Terra's Go-like Interfaces. That won't work though because
+you'd need to make deftype/defrecord backed by Structs, which forces you to pull in memory pools early, or use
+manual memory management everywhere.
+Perhaps this can still be remedied with a Terra-specific library like mentioned above.  This adds complexity in
+abstraction mismatch - `defstruct, definterface, extend-struct` vs `defrecord, defprotocol, extend-type`.  The former
+is lower-level, requires manual memory management or only stack allocations, the latter is higher-level, managed.
+Another source of mismatch comes with array-based operations - in Lua, they work against Tables (being treated as an
+array) and in Terra they will need to be redefined to work on Arrays and Vectors (array functions will need to be
+a protocol)
+
+(Jan 30, 2014)
+There exists a [Lua Std Lib](http://rrthomas.github.io/lua-stdlib/) project that may fill in much of the missing (hand-written)
+functionality between Lua as a host and JS as a host.
+ * A Prototype object system
+ * A List that I can use as a cljs-array
+ * String Bufers
+ * Better IO, Math, and String capabilities
+ * More FP oriented (but also has prototype-OO based interfaces for some things)
+
+If adopted, I would move  multimethods, range, and dir to a clone of std-lib.
+I need to see the total file size of standard lib, and see how I roll it into Terra's compilation.
+
+It also seems like the Go-Like interface library is VERY efficient.  I'm consider writing a
+protocol-like veneer on top of it, for style purposes only - and adding some metadata to structs
+(it's difficult to tell if a struct implements a protocol.  The metadata approach in the Java-like
+system can easily be adapted)
+
+I'd also like to generate comments in the conventions set forth in [LDoc](https://github.com/stevedonovan/LDoc)
+
+It might make sense to repackage `std` with the Terra functionality I want in a
+single Terra file (with namespaced/tabled functionality)
+
+
+(Jan 31, 2014)
+After looking at [stdlib](https://github.com/rrthomas/lua-stdlib), [penlight](https://github.com/stevedonovan/Penlight), and [libmc](https://bitbucket.org/leafstorm/libmc/src),
+The best option looks like sticking with stdlib.
+
+I'd like to add `startswith` and `endswith` in string
+I'd like to add `take` and `drop`, implemented with sub, to the List object.
+The `functional.id` function should be renamed to `identity`
+The `functional.fold` should be renamed to reduce, correctly supporting the optional start arg (otherwise, use the first value of the iterator)
+Add `range` to functional namespace.  Add `dir` to debug - update `dir` to prettyprint.  Add multimethods.
+We should also add in [LPeg](https://github.com/lua/lpeg) - which will also give me a first class Pattern object (and a powerful pattern system)
+Remove stdlib's Trees, Use Terra's notion of trees (which it also refers to as tuples, because they're used with structs)
+Replace Terra's list with the new List, rename to TableList
+Accept the code clone on memoize - it can be refactored later if it matters
+Minify the entire file. (to make the executable smaller)
+
+In CLJS Compilation, use [LuaJIT's compiler](http://luajit.org/running.html) in place of Closure.
+It will do deadcode elimination and other optimizations, outputting a bytecode file that should run with the Terra executable.
+We just need to compile with optimizations on... just like the Closure Compiler.
+
+Also, there are [modifications to Lua](http://www.orocos.org/wiki/orocos/toolchain/luacookbook),
+which allow it to be used for hard real-time computation.  I also found [EEL](http://eel.olofson.net/) - a scripting language,
+in the spirit of Lua, with prototypical OO, exceptions, and specificially built for hard real-time systems (audio and control).
+
+
+(Feb 9, 2014)
+As I was reading more about Lua [OO benchmarks](http://lua-users.org/wiki/ObjectBenchmarkTests)
+and determining if an IO system could be placed upon Lua(JIT), I stumbled upon
+the [Potion Language](https://github.com/perl11/potion) - taking the ideas of
+Lua and IO and placing them upon a highly modified LuaJIT.  After some serious
+investigation I still think the above approach is the best fit.
+
+(Feb 16, 2014)
+You should keep an eye on [terra-utils](https://github.com/dritchie/terra-utils).
+Also look at Daniel Ritchie's other probability things: [Stan-inspired Terra-ad](https://github.com/dritchie/terra-ad) -
+which includes a simple memory pool system, and [quicksand](https://github.com/dritchie/quicksand) -
+probability programming for Terra
+
+Just a recap of the data structures by "tier".
+Only the highest tier (as it appears in the CLJS tooling) supports a
+fully-unified interop across all tier structures
+
+#### Low-level, typed
+At this tier, code is targeting LLVM compilation and everything is typed.
+Mutability is default, and there is no memory safety.
+
+ * Dict (to be written, based on HMap [here](https://github.com/dritchie/terra-utils)
+ * Array
+ * Vector (this is special-purposed for SIMD; it's namespaced to avoid clashing)
+ * Struct
+
+Dispatch is:
+ * Function call
+ * Interfaces (Go-like/protocol-like dispatch)
+
+#### Environment, dynamic
+At this tier, code is dynamic and part of an active runtime (LuaJIT).
+This code is used for low-level generation, or the foundation for a dynamic
+application.  Mutability is the default, there is memory safety. Exception
+handling is [protective calls](http://www.lua.org/pil/8.4.html), signaling, and recovery.
+
+ * Table
+ * TableList
+ * Tree
+ * Container (an object with no properties, only functions)
+ * Object (a prototypical object; uses Lua's OO metatables pattern)
+ * Peg (an LPeg pattern Object)
+
+Dispatch is:
+ * Function call
+ * Multimethods without hierarchies
+
+#### Runtime, dynamic
+At this tier, code is compiled AOT to target the lower two tiers (environment
+and low-level).  This tier is very high level and extensible.  It champions
+simplistic systems, functional programming, immutability, and memory safety
+by default.  There is full and extensible exception handling.  Code here
+generates Environment and Low-level code.
+
+ * Map
+ * List
+ * Vector
+ * ArrayMap
+ * Set
+ * Record
+
+Dispatch is:
+ * Function call
+ * Multimethods with hierarchies
+ * Protocols
+ * core.match-based
+

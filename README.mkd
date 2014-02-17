@@ -1,0 +1,281 @@
+
+ClojureScript-Terra
+===================
+
+`ClojureScript Terra` is a [ClojureScript](https://github.com/clojure/clojurescript/) compiler that targets [Terra](https://github.com/zdevito/terra).
+
+This is the extracted design information from the developer log.
+
+The original project was called *Clojure/Cyclone Inspired C*, or `CLIC`, based on
+a design question.  The project in here is referred to as ClojureScript-Terra,
+given the path forward (enhancing Lua and Terra, writing a CLJS compiler)
+
+
+## Rationale
+
+Clojure's opinions make for an attractive, well-balanced, powerful, and simple
+language, but there are no comparable options for highly-constrained
+applications:
+
+ * Operating systems and kernels
+ * Real-time computation
+ * resource-sensitive and resource-constrained systems
+
+While Clojure and the JVM (and to some degree  CLJS and V8) are advantageous in larger
+systems-of-systems engineering, they are not ideal or even acceptable for the
+fields listed above.  Typically, such domains require or strive for:
+
+ * Binary compatiblity with C (for library and ABI support)
+ * LLVM compilation targets
+ * Runtimes smaller than 500K
+ * Deterministic runtime characteristics
+
+In some cases, Clojure (and the JVM) could be adapted to achieve some of the desired
+goals.  Interfacing and adapting the use of something like [Javolution](javolution.org)
+would allow Clojure to be more deterministic and fulfill real-time requirements.
+
+Ideally, producing LLVM intermediate code would allow for a compilation chain
+to take advantage of [HSA tooling](http://hsafoundation.com/hsa-developer-tools/)
+and other advancements from LLVM targets.  This is ideal for High-Performance
+computing as well as embedded (but highly specialized) Systems-on-a-Chip (SoC).
+
+The main design question is:
+
+     What would C look like if it were designed today?
+
+C inspired by:
+
+ * [Clojure](http://clojure.org/)
+ * [Cyclone](http://cyclone.thelanguage.org/)
+
+To a lesser degree
+
+ * [Rust](http://www.rust-lang.org/)
+ * [SAClib](https://github.com/ohpauleez/saclib)
+ * [BitC](http://www.bitc-lang.org/)
+ * [Deca](https://code.google.com/p/decac/)
+ * [Io](http://iolanguage.org/) - homoiconic, Smalltalk-OO
+ * [Julia](http://julialang.org/) - homoiconic (like R)
+ * [Terra](http://terralang.org)
+   * [HackerNews Conversation](https://news.ycombinator.com/item?id=5702793) expands on the sweet-spot for Terra
+   * [Original paper](http://terralang.org/pldi071-devito.pdf)
+ * [Mjolnir](https://github.com/halgari/mjolnir)
+
+I would like something C-like/native that supports:
+
+ * Namespaces
+ * Protocols & ideally predicate dispatch
+ * Persistent data structures with transients (or pods) and metadata
+ * Region-based memory management with region inference
+ * First class functions and proper closures
+ * Destructuring/binding via data structures or pattern matching
+ * The Sequence abstraction
+ * The separation of state and identity (as found in Clojure)
+ * Lazy and eager evaluation - lazy by default with functions for eagerness
+ * Improved pointer safety and region checking
+ * Immutability as default, while maintaining convenient array manipulation
+ * Structs as Records with property access
+ * Proper promises
+ * Common FP functions/operations provided (all sequence oriented functions)
+ * Some notion of memory safety
+ * No requirement of an external runtime/virtual or operating system
+   * Although using one should always remain an option
+
+The language should explore:
+
+ * Separating the syntax from the language
+ * Pluggable, Optional type systems, with a separate hook/phase in compilation
+   * This includes the type system, checker (if any), and inference
+   * The only requirement is that all type systems need to resolve to
+     C types/OS memory
+ * Pluggable, Optional exception handling (exception handling as a library)
+ * Multi-stage programming
+ * What the separation of state and identity looks like at low-level interactions
+ * Can this all be implemented cleanly on top of C (ala SAClib)?
+ * Optional GC - either in place of the region system, or on top of the region system
+   * Maybe this implies regions are opt-in?
+
+Additional (but orthogonal) explorations include:
+
+ * Multiple Language feature expressions with LLVM cross-compilation and linking
+   * This could be built on something like Julia's `llvmcall`
+ * Concurrency that supports Futures and CSP (state machines in parallel) at a minimum
+
+The language is never concerned with:
+
+ * Binary compatibility with C++
+ * Image-based runtimes (ala Smalltalk)
+
+
+## Approach
+
+The [Developer Log](./developer_log.mkd) contains log entries as the ideas
+are explored one-by-one, and the design is evolved and shaped.  Below is the
+most recent, collective view of the design.  Please cross-reference that
+doc for additional information/links.
+
+The current approach is:
+
+Write a ClojureScript compiler on top of Terra (which in turn uses LuaJit).
+This allows a developer to choose from a language spectrum that covers: C ->
+Terra -> Lua(JIT) -> ClojureScript.  In this spectrum C exists primarily for
+legacy reasons - where you'd want to embed Terra into an existing system, or
+where you'd want Terra's FFI to use a C library (legacy or hand-written).
+Terra's LLVM backing allows open, extensible, low-level compilation to LLVM
+Target, while providing the tooling for such low-level code to be generated
+from higher level languages (Lua and ClojureScript).  The generated/compiled
+code requires no runtime whatsoever.  LuaJIT's resident memory space is about
+300K, but executes code considerably faster than Python, PyPy, Julia, and V8.
+Terra statically links the LLVM libs, requiring no third-party dependencies for
+running the packaged runtime.
+
+In summary:
+
+ * Binary compatibility with C
+   * Extremely fast and efficient FFI, even when used dynamically
+   * FFI Terra code can compile down (to an executable or shared-lib)
+ * Embed in C applications
+ * Small footprint (between 300K - 4mb when statically linked)
+ * Compilation with no runtime dependency
+ * Optional Runtime for dynamic scripting (or live code generation/optimization),
+   with better performance characteristics than alternative scripting languages
+ * ClojureScript for the highest-level of abstraction; AOT compilation (for the time being)
+   * CLJS can be used purely for Lua (scripting on LuaJIT), Terra (low-level code), or both
+
+This approach allows for:
+
+ * Talking directly to hardware if needed via C libs or something like [Snabb Switch](https://github.com/SnabbCo/snabbswitch/wiki)
+   * See testimony [here](https://news.ycombinator.com/item?id=7250505) and follow links as needed.
+ * Embedding into kernels, even real-time ones like [L4](https://os.inf.tu-dresden.de/L4Re/doc/l4re_servers_ned.html)
+ * Building applications, scripts, runtime libraries, or AOT-compiled shared-libs
+ * Building hard real-time applications on top of stock Linux [with some modifications](http://www.orocos.org/wiki/orocos/toolchain/luacookbook)
+
+But currently lacks:
+
+ * Library support to the degree found in other languages (Python, JavaScript, Java)
+   * limited to C, ClojureScript, and [lua libs](http://luarocks.org/repositories/rocks/); Virtually no Terra libs (language is new)
+ * Complexity associated with the spectrum of multi-stage programming
+   * For example, different tiers have different dispatch mechanisms that don't
+     interop;  Different exception handling mechanisms
+ * Data structures differ between multi-stage tiers and must conform to interop
+   rules
+
+
+### The tiers
+
+#### Host, typed
+This is just C.
+
+#### Low-level, typed
+At this tier, code is targeting LLVM compilation and everything is typed.
+Mutability is default, and there is no memory safety.
+There is no formal notion of mutability or separation of state and identity.
+
+ * Dict (to be written, based on HMap [here](https://github.com/dritchie/terra-utils)
+ * Array
+ * Vector (this is special-purposed for SIMD; it's namespaced to avoid clashing)
+ * Struct
+
+Dispatch is:
+ * Function call
+ * Interfaces (Go-like/protocol-like dispatch)
+
+#### Runtime, dynamic
+At this tier, code is dynamic and part of an active runtime (LuaJIT).
+This code is used for low-level generation, or the foundation for a dynamic
+application.  Mutability is the default, there is memory safety. Exception
+handling is [protective calls](http://www.lua.org/pil/8.4.html), signaling, and recovery.
+There is no formal notion of mutability or separation of state and identity.
+
+ * Table
+ * TableList
+ * Tree
+ * Container (an object with no properties, only functions)
+ * Object (a prototypical object; uses Lua's OO metatables pattern)
+ * Peg (an LPeg pattern Object)
+
+Dispatch is:
+ * Function call
+ * Multimethods without hierarchies
+
+#### Generation, dynamic
+At this tier, code is compiled AOT to target the lower two tiers (runtime
+and low-level).  This tier is very high-level and extensible.  It champions
+simplistic systems, functional programming, immutability, and memory safety
+by default.  There is full and extensible exception handling.  There is full
+support for metadata and the separation of state and identity.  Code here
+generates Environment and Low-level code.
+
+ * Map
+ * List
+ * Vector
+ * ArrayMap
+ * Set
+ * Record
+
+Dispatch is:
+ * Function call
+ * Multimethods with hierarchies
+ * Protocols
+ * core.match-based
+
+
+### TODO
+
+The current TODO is (See Jan 31,2014 and after in the dev log):
+
+ * Build a better `stdlib` with LPeg included (and wrapped as an Object)
+ * Integrate and refactor Terra with the new stdlib (details in dev log)
+ * Add the Interface (Protocol) piece into Terra with reflection added
+ * Write CLJS-Lua upon the new stdlib (supporting LuaJIT FFI and FFI calls)
+   and LDoc
+ * Make CLJS array operations protocol-based, add a `cljs.terra` namespace
+   for the Terra specific features; Array opts should work on Arrays, Vectors,
+   and TableLists
+ * Replace `std.functional` with a `Mori`-like precompiled CLJS core
+   * Data structures are first class in std (not in `functional`)
+ * Rope in pieces from [Terra Utils](https://github.com/dritchie/terra-utils)
+ * Add `llvm_call` to Terra and expose in `cljs.terra`
+ * Package up the [MPS Memory Pool](http://www.ravenbrook.com/project/mps/) for
+   Terra and expose in `cljs.terra.mempool`
+
+For details of these items (and their rationale), please read the [Developer Log](./developer_log.mkd).
+
+
+## Implementation notes
+
+For now, the compiler infrastructure all comes from ClojureScript, which
+requires the JVM.  It will output a single Terra file.
+
+One notable difference is the absence of `(js* ...)` forms, replaced with
+`(host* ...)` forms.  This is intentionally done to make the compiler less
+js-specific.  Note that Terra sits on top of Lua, so you can put valid Lua or
+Terra code in the `host*` form.  It also means that this compiler uses an
+adapted CLJS analyzer.
+
+
+## Usage
+
+TODO
+
+- - - -
+
+## License
+
+Copyright © 2014 Paul deGrandis
+
+The use and distribution terms for this software are covered by the
+[Eclipse Public License 1.0](http://opensource.org/licenses/eclipse-1.0)
+which can be found in the file [epl-v10.html](epl-v10.html) at the root of this distribution.
+
+By using this software in any fashion, you are agreeing to be bound by
+the terms of this license.
+
+You must not remove this notice, or any other, from this software.
+
+- - - -
+
+The ClojureScript compiler is distributed under the [Eclipse Public License version 1.0](http://opensource.org/licenses/EPL-1.0).
+
+Terra, Terra-utils, Lua, LPeg, stdlib, and LuaJIT are all under the [MIT License](http://opensource.org/licenses/mit-license.html).
+

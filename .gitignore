@@ -1,0 +1,51 @@
+# Project related
+
+# Java related
+pom.xml
+*jar
+*.class
+
+# Leiningen
+classes/
+lib/
+native/
+checkouts/
+target/
+.lein-deps-sum
+.lein-failures
+.lein-repl-history
+.lein-cljsbuild-repl
+.lein-plugins/
+repl-port
+
+# Python
+*.pyc
+*.pyo
+/__pycache__/
+
+# Ruby
+Gemfile.lock
+
+# Temp Files
+*.orig
+*~
+.*.swp
+.*.swo
+*.tmp
+*.bak
+
+# Editors (IntelliJ / Eclipse)
+*/.idea
+*/.classpath
+*/.project
+*/.settings
+
+# OS X
+.DS_Store
+
+# Logging
+*.log
+
+# Docs
+autodoc/
+
