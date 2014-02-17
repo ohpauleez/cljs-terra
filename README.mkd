@@ -279,3 +279,5 @@ The ClojureScript compiler is distributed under the [Eclipse Public License vers
 
 Terra, Terra-utils, Lua, LPeg, stdlib, and LuaJIT are all under the [MIT License](http://opensource.org/licenses/mit-license.html).
 
+MPS Memory Pool is distributed under the [BDB / Sleepycat License](http://opensource.org/licenses/Sleepycat)
+
