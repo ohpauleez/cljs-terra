@@ -121,7 +121,7 @@ This allows a developer to choose from a language spectrum that covers: C ->
 Terra -> Lua(JIT) -> ClojureScript.  In this spectrum C exists primarily for
 legacy reasons - where you'd want to embed Terra into an existing system, or
 where you'd want Terra's FFI to use a C library (legacy or hand-written).
-Terra's LLVM backing allows open, extensible, low-level compilation to LLVM
+Terra's LLVM backing allows open, extensible, low-level compilation to any LLVM
 Target, while providing the tooling for such low-level code to be generated
 from higher level languages (Lua and ClojureScript).  The generated/compiled
 code requires no runtime whatsoever.  LuaJIT's resident memory space is about
