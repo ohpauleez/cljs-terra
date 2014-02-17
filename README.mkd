@@ -169,7 +169,7 @@ This is just C.
 #### Low-level, typed
 At this tier, code is targeting LLVM compilation and everything is typed.
 Mutability is default, and there is no memory safety.
-There is no formal notion of mutability or separation of state and identity.
+There is no formal notion of metadata or separation of state and identity.
 
  * Dict (to be written, based on HMap [here](https://github.com/dritchie/terra-utils)
  * Array
@@ -185,7 +185,7 @@ At this tier, code is dynamic and part of an active runtime (LuaJIT).
 This code is used for low-level generation, or the foundation for a dynamic
 application.  Mutability is the default, there is memory safety. Exception
 handling is [protective calls](http://www.lua.org/pil/8.4.html), signaling, and recovery.
-There is no formal notion of mutability or separation of state and identity.
+There is no formal notion of metadata or separation of state and identity.
 
  * Table
  * TableList
