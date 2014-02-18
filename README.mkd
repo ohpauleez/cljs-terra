@@ -10,6 +10,10 @@ The original project was called *Clojure/Cyclone Inspired C*, or `CLIC`, based o
 a design question.  The project in here is referred to as ClojureScript-Terra,
 given the path forward (enhancing Lua and Terra, writing a CLJS compiler)
 
+[Timothy Baldridge](https://github.com/halgari) has also been pursuing projects
+with similar goals.  There could be a point where I migrate the efforts found
+here into one of his projects.
+
 
 ## Rationale
 
@@ -103,7 +107,7 @@ Additional (but orthogonal) explorations include:
 
 The language is never concerned with:
 
- * Binary compatibility with C++
+ * Binary compatibility with C++ (but won't be explicitly avoided)
  * Image-based runtimes (ala Smalltalk)
 
 
@@ -171,7 +175,7 @@ At this tier, code is targeting LLVM compilation and everything is typed.
 Mutability is default, and there is no memory safety.
 There is no formal notion of metadata or separation of state and identity.
 
- * Dict (to be written, based on HMap [here](https://github.com/dritchie/terra-utils)
+ * Dict (to be written, based on HMap [here](https://github.com/dritchie/terra-utils))
  * Array
  * Vector (this is special-purposed for SIMD; it's namespaced to avoid clashing)
  * Struct
@@ -244,6 +248,8 @@ For details of these items (and their rationale), please read the [Developer Log
 
 ## Implementation notes
 
+#### ClojureScript
+
 For now, the compiler infrastructure all comes from ClojureScript, which
 requires the JVM.  It will output a single Terra file.
 
@@ -252,6 +258,28 @@ One notable difference is the absence of `(js* ...)` forms, replaced with
 js-specific.  Note that Terra sits on top of Lua, so you can put valid Lua or
 Terra code in the `host*` form.  It also means that this compiler uses an
 adapted CLJS analyzer.
+
+Lua optimizes tail calls.  You should still make your idiomatic Clojure (with
+explicit `recur` calls), but under the hood TCO is available.
+
+RegEx objects/literals are PEG literals in CLJS-Terra.  Regular expressions can
+be captured as PEG Patterns.
+To make regex more convenient, any place that accepts a Match/Pattern/PEG
+literal, can also take a string.  If a string is passed, it's treated as a
+Regular Expression.
+
+The LuaJIT compiler takes the place of the Google Closure compiler in
+CLJS-Terra.  Controls are not currently in place, but you can see the levels
+of [optimizations and options](http://luajit.org/running.html).
+
+Low-level code (as defined by `defnf`, etc) can optionally be compiled to
+executables or shared libraries during runtime or compilation time (where
+ever the `terra/saveobj` call appears.
+
+#### Terra
+
+CLJS-Terra uses a custom `terralib`. Shims are in place to allow for full
+interoperability with the one found within Terra itself.
 
 
 ## Usage
