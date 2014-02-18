@@ -14,6 +14,9 @@ given the path forward (enhancing Lua and Terra, writing a CLJS compiler)
 with similar goals.  There could be a point where I migrate the efforts found
 here into one of his projects.
 
+Please see the [Implementation Notes](#implementation-notes) below for various
+modifications this project has made to ClojureScript and Terra
+
 
 ## Rationale
 
