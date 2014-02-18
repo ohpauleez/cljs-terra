@@ -210,8 +210,7 @@ At this tier, code is compiled AOT to target the lower two tiers (runtime
 and low-level).  This tier is very high-level and extensible.  It champions
 simplistic systems, functional programming, immutability, and memory safety
 by default.  There is full and extensible exception handling.  There is full
-support for metadata and the separation of state and identity.  Code here
-generates Environment and Low-level code.
+support for metadata and the separation of state and identity.
 
  * Map
  * List
