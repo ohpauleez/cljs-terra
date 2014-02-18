@@ -262,8 +262,9 @@ js-specific.  Note that Terra sits on top of Lua, so you can put valid Lua or
 Terra code in the `host*` form.  It also means that this compiler uses an
 adapted CLJS analyzer.
 
-Lua optimizes tail calls.  You should still make your idiomatic Clojure (with
-explicit `recur` calls), but under the hood TCO is available.
+Lua optimizes tail calls.  You should still write idiomatic Clojure (with
+explicit `recur` calls), but under the hood TCO is available and utilized
+at different points in the compiler.
 
 RegEx objects/literals are PEG literals in CLJS-Terra.  Regular expressions can
 be captured as PEG Patterns.
@@ -277,7 +278,7 @@ of [optimizations and options](http://luajit.org/running.html).
 
 Low-level code (as defined by `defnf`, etc) can optionally be compiled to
 executables or shared libraries during runtime or compilation time (where
-ever the `terra/saveobj` call appears.
+ever the `terra/saveobj` call appears).
 
 #### Terra
 
