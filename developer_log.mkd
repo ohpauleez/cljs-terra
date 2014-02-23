@@ -477,3 +477,46 @@ Dispatch is:
  * Protocols
  * core.match-based
 
+(Feb 23, 2014)
+I got curious about various approaches to threads, threadpools, and async I/O
+that could work well in Lua, where Lua doesn't impose a lock (GIL or otherwise),
+but where you'd want to keep sanity intact.
+
+The obvious (historical) start was to investigate Coro and Libev, which quickly
+gave way to libuv (the library behind Node.js and currently also what powers
+Rust's tasks).
+
+The problem I wanted to avoid was callbacks everywhere, although that could be
+somewhat undone with CSP.
+
+I found Richard Hundt's Luv (libuv wrappers) which included OS threads and
+bundled ZeroMQ for inter-thread communication.  When I was previously talking
+with Tim Baldridge, we agreed a message-passing thread communication was the
+only safe model (unless I wanted to take the [Lua Wiki advice](http://lua-users.org/wiki/ThreadsTutorial) and add a lock
+to the system, essentially killing the true threading).
+Luv has the benefit of being integrated into Lua's coroutines, so everything
+feels more like CSP than callbacks-and-pull-oriented.  This is a natural fit
+and one that fits the programming model.
+
+Richard removed the ZeroMQ dependency, slimmed the package down, removed threads,
+processes, streamed-stdin/stdout/stderr, and a other few things,
+and released it as [Ray](https://github.com/richardhundt/ray) to avoid naming
+confusion from another Lua libuv wrapper from the luvit guy, [luv](https://github.com/creationix/luv).
+That particular luv is a direct wrap of the libuv stuff.
+
+Ray nicely provides fibers (green threads), which look exactly like you'd expect.
+
+I don't necessarily want OS threads directly, I want a worker queue backed by
+OS Threads, and I want "jobing" to perform more like Futures (as found in Clojure).
+I think this is possible if threads in the threadpool always get a new
+Terra/Lua state, or get a copy/clone of the current Lua/Terra state at the moment
+of dispatch.  The open question is, how expensive is the State copy, and how often
+do futures really need to reference something (global state) that exists in the
+current environment?  As a first attempt of adding libuv's worker queue into
+Ray, I might try only New States (or passed in lua tables), where the queue submission returns a wrapped
+fiber that handles yielding and resuming with the main loop correctly, and
+has a ".result()" function, that does a ".join()" call under the hood.
+
+The tradeoff here is that in order to use the concurrency/async stuff, you *always*
+have to accept that the libuv loop will be running under the hood.
+
