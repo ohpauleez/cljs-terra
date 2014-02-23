@@ -493,7 +493,7 @@ somewhat undone with CSP.
 
 I found Richard Hundt's Luv (libuv wrappers) which included OS threads and
 bundled ZeroMQ for inter-thread communication.  When I was previously talking
-with Tim Baldridge, we agreed a message-passing thread communication was the
+with Timothy Baldridge, we agreed a message-passing thread communication was the
 only safe model (unless I wanted to take the [Lua Wiki advice](http://lua-users.org/wiki/ThreadsTutorial) and add a lock
 to the system, essentially killing the true threading).
 Luv has the benefit of being integrated into Lua's coroutines, so everything
@@ -521,4 +521,8 @@ has a ".result()" function, that does a ".join()" call under the hood.
 
 The tradeoff here is that in order to use the concurrency/async stuff, you *always*
 have to accept that the libuv loop will be running under the hood.
+Another tradeoff is that this still doesn't satisfy running `core.async`'s
+state machines in parallel (at least no solution that is immediate to me right
+now).
+
 
