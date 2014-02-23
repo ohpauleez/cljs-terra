@@ -107,6 +107,8 @@ Additional (but orthogonal) explorations include:
  * Multiple Language feature expressions with LLVM cross-compilation and linking
    * This could be built on something like Julia's `llvmcall`
  * Concurrency that supports Futures and CSP (state machines in parallel) at a minimum
+   * This will most likely be built on [Ray](https://github.com/richardhundt/ray) (libuv) or Richard Hundt's predecessor [Luv](https://github.com/richardhundt/luv) (potentially his *ray* branch)
+
 
 The language is never concerned with:
 
