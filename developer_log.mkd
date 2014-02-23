@@ -523,6 +523,12 @@ The tradeoff here is that in order to use the concurrency/async stuff, you *alwa
 have to accept that the libuv loop will be running under the hood.
 Another tradeoff is that this still doesn't satisfy running `core.async`'s
 state machines in parallel (at least no solution that is immediate to me right
-now).
+now).  The core.async + fibers could be confusing (different systems at different
+levels with slightly-different-but-very-close semantics).
+Terra also has no issue with using pthreads directly, so building an executor
+pool at that level is an option, but this puts incredible strain on what you
+can do in Terra for AOT/generated code and what you can do during LuaJIT runtime
+stuff.
+
 
 
