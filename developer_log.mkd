@@ -528,7 +528,9 @@ levels with slightly-different-but-very-close semantics).
 Terra also has no issue with using pthreads directly, so building an executor
 pool at that level is an option, but this puts incredible strain on what you
 can do in Terra for AOT/generated code and what you can do during LuaJIT runtime
-stuff.
-
+stuff.  It's nice having all the socket stuff provided (I think I'd have to roll
+in Unix Domain Sockets) it means using only fibers at the core when using them
+directly.  Perhaps this can be remedied a little by tucking it all under an
+`async` module as the original design doc suggested.
 
 
