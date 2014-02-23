@@ -477,6 +477,8 @@ Dispatch is:
  * Protocols
  * core.match-based
 
+#### Latest
+
 (Feb 23, 2014)
 I got curious about various approaches to threads, threadpools, and async I/O
 that could work well in Lua, where Lua doesn't impose a lock (GIL or otherwise),
