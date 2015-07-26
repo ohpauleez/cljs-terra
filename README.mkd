@@ -17,6 +17,8 @@ here into one of his projects.
 Please see the [Implementation Notes](#implementation-notes) below for various
 modifications this project has made to ClojureScript and Terra
 
+There will be a refresh of this project (and the final missing pieces will be
+completed) when the cljs-bootstrap work settles a bit more.
 
 ## Rationale
 
